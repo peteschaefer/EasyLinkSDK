@@ -32,23 +32,39 @@ jint JNICALL Java_com_chessnut_EasyLink_switchUploadMode (JNIEnv *, jclass)
   return ChessLink::instance()->switchUploadMode();
 }
 
-void JNICALL Java_com_chessnut_EasyLink_cl_1set_1realtime_1callback (JNIEnv *env, jclass, jobject callback)
+std::string current_fen;
+
+void JNICALL Java_com_chessnut_EasyLink_setRealtimeCallback(JNIEnv *env, jclass, jobject callback)
 {
-  static JNIEnv* jniEnv = env;
+  static JavaVM *jvm;
+  env->GetJavaVM(&jvm);
+  assert(jvm!=NULL);
+
+  static JNIEnv* thread_env = NULL;
   static jclass callBackInterface = env->FindClass("com/chessnut/EasyLink$IRealTimeCallback");
   assert(callBackInterface);
-  static jmethodID callBackMethod = env->GetMethodID(callBackInterface, "realTimeCallback", "([B)V");
+  static jmethodID callBackMethod = env->GetMethodID(callBackInterface, "realTimeCallback", "(Ljava/lang/String;)V");
   assert(callBackMethod);
-  static jobject callbackObject = callback;
+  static jobject callbackObject = env->NewGlobalRef(callback);
   assert(callbackObject);
 
   ChessLink::instance()->setRealTimeCallback([](string fen) {
-    jstring arg = jniEnv->NewStringUTF(fen.c_str());
-    jniEnv->CallVoidMethod(callbackObject, callBackMethod, arg);
+    current_fen = fen;
+    //printf("current fen: %s\n", current_fen.c_str());
+
+    //  worker thread must be known to the JVM
+    if (thread_env==NULL) {
+      jint attach = jvm->AttachCurrentThreadAsDaemon((void**)&thread_env, NULL);
+      assert(attach==JNI_OK);
+      assert(thread_env!=NULL);
+    }
+
+    jstring arg = thread_env->NewStringUTF(current_fen.c_str());
+    thread_env->CallVoidMethod(callbackObject, callBackMethod, arg);
   });
 }
 
-jint JNICALL Java_com_chessnut_EasyLink_cl_beep (JNIEnv *, jclass, jint frequency, jint ms)
+jint JNICALL Java_com_chessnut_EasyLink_beep (JNIEnv *, jclass, jint frequency, jint ms)
 {
   return ChessLink::instance()->beep(frequency, ms);
 }
@@ -64,15 +80,15 @@ jint JNICALL Java_com_chessnut_EasyLink_led
 
 jstring JNICALL Java_com_chessnut_EasyLink_getMcuVersion (JNIEnv *env, jclass)
 {
-  const char* ver = ChessLink::instance()->getMcuVersion().c_str();
-  return env->NewStringUTF(ver);
+  string ver = ChessLink::instance()->getMcuVersion();
+  return env->NewStringUTF(ver.c_str());
 }
 
 
 jstring JNICALL Java_com_chessnut_EasyLink_getBleVersion (JNIEnv *env, jclass)
 {
-  const char* ver = ChessLink::instance()->getBleVersion().c_str();
-  return env->NewStringUTF(ver);
+  string ver = ChessLink::instance()->getBleVersion();
+  return env->NewStringUTF(ver.c_str());
 }
 
 jint JNICALL Java_com_chessnut_EasyLink_getBattery (JNIEnv *, jclass)
