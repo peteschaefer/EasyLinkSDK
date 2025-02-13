@@ -1,4 +1,5 @@
 #include "EasyLink.h"
+#include <string.h>
 
 // device pid, vid , usage_page
 constexpr unsigned short DEVICE_VID = 0x2d80;
